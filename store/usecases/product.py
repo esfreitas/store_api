@@ -7,6 +7,7 @@ from store.models.product import ProductModel
 from store.schemas.product import ProductIn, ProductOut, ProductUpdate, ProductUpdateOut
 from store.core.exceptions import NotFoundException
 from pymongo.errors import PyMongoError
+from datetime import datetime
 
 
 class ProductUsecase:
@@ -33,17 +34,32 @@ class ProductUsecase:
 
         return ProductOut(**result)
 
-    async def query(self) -> List[ProductOut]:
-        return [ProductOut(**item) async for item in self.collection.find()]
+   async def update(self, id: UUID, body: ProductUpdate) -> ProductUpdateOut:
+        body_dict = body.model_dump(exclude_none=True)
+        body_dict["updated_at"] = datetime.utcnow()  # Atualiza a data de atualização
 
-    async def update(self, id: UUID, body: ProductUpdate) -> ProductUpdateOut:
         result = await self.collection.find_one_and_update(
             filter={"id": id},
-            update={"$set": body.model_dump(exclude_none=True)},
+            update={"$set": body_dict},
             return_document=pymongo.ReturnDocument.AFTER,
         )
 
+        if not result:
+            raise NotFoundException(message=f"Product not found with filter: {id}")
+
         return ProductUpdateOut(**result)
+
+    async def query(self, min_price: float | None = None, max_price: float | None = None) -> List[ProductOut]:
+        filter_query = {}
+
+        if min_price is not None:
+            filter_query["price"] = {"$gte": min_price}
+        if max_price is not None:
+            filter_query["price"] = {"$lte": max_price}
+        if min_price is not None and max_price is not None:
+            filter_query["price"] = {"$gte": min_price, "$lte": max_price}
+
+        return [ProductOut(**item) async for item in self.collection.find(filter_query)]
 
     async def delete(self, id: UUID) -> bool:
         product = await self.collection.find_one({"id": id})
