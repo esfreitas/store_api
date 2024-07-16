@@ -27,12 +27,7 @@ async def get(
         return await usecase.get(id=id)
     except NotFoundException as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
-
-
-@router.get(path="/", status_code=status.HTTP_200_OK)
-async def query(usecase: ProductUsecase = Depends()) -> List[ProductOut]:
-    return await usecase.query()
-
+        
 
 @router.patch(path="/{id}", status_code=status.HTTP_200_OK)
 async def patch(
@@ -40,7 +35,18 @@ async def patch(
     body: ProductUpdate = Body(...),
     usecase: ProductUsecase = Depends(),
 ) -> ProductUpdateOut:
-    return await usecase.update(id=id, body=body)
+    try:
+        return await usecase.update(id=id, body=body)
+    except NotFoundException as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
+
+@router.get(path="/", status_code=status.HTTP_200_OK)
+async def query(
+    usecase: ProductUsecase = Depends(),
+    min_price: float | None = Query(None, description="Minimum price filter"),
+    max_price: float | None = Query(None, description="Maximum price filter"),
+) -> List[ProductOut]:
+    return await usecase.query(min_price=min_price, max_price=max_price)
 
 
 @router.delete(path="/{id}", status_code=status.HTTP_204_NO_CONTENT)
